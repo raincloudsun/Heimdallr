@@ -35,6 +35,7 @@ object UserActor {
   case class Left(outgoing: ActorRef)
   case class IncomingMessage(text: String)
   case class OutgoingMessage(text: String)
+  case class CustomResponse(event: String, rcode: Int, data: String)
 }
 
 /**
@@ -44,7 +45,8 @@ object UserActor {
   *
   * @param chatRoomID ChatRoom Unique Number
   */
-class UserActor(chatRoomID: Int, chatSuper: ActorRef, ip: RemoteAddress) extends Actor with ActorLogging {
+class UserActor(chatRoomID: Int, chatSuper: ActorRef, httpClientActor: ActorRef, ip: RemoteAddress)
+  extends Actor with ActorLogging {
   import UserActor._
   implicit val executionContext: ExecutionContext = context.dispatcher
   context.setReceiveTimeout(Duration.create(2, TimeUnit.HOURS))
@@ -143,6 +145,9 @@ class UserActor(chatRoomID: Int, chatSuper: ActorRef, ip: RemoteAddress) extends
         } else {
           chatRoom ! ChatRoomActor.ChatMessage(text)
         }
+
+      case CustomResponse(event, rcode, data) =>
+        // TODO: HttpClient Response Message
 
       // delivers outgoing messasge to client
       case ChatRoomActor.ChatMessage(text) =>

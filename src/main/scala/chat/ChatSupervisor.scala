@@ -16,13 +16,14 @@
  */
 package chat
 
-import akka.actor._
-import akka.actor.SupervisorStrategy._
+import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import akka.actor._
+import akka.actor.SupervisorStrategy._
+import akka.stream.ActorMaterializer
 import org.json4s._
 import org.json4s.{DefaultFormats, JValue}
-import java.util.concurrent.TimeUnit
 import EventConstants._
 
 /**
@@ -31,6 +32,7 @@ import EventConstants._
   */
 class ChatSupervisor(envType: String) extends Actor with ActorLogging {
   implicit val system = context.system
+  implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContext = context.dispatcher
 
   override val supervisorStrategy =
@@ -46,6 +48,7 @@ class ChatSupervisor(envType: String) extends Actor with ActorLogging {
     }
 
   override def preStart(): Unit = {
+    ChatRooms.httpClient = context.actorOf(Props(new HttpClient), "hc")
     log.info( "Heimdallr ChatSupervisor Staring ..." )
   }
 
@@ -109,7 +112,6 @@ class ChatSupervisor(envType: String) extends Actor with ActorLogging {
 
     case RemoveChatRoom(chatRoomID) =>
       removeChatRoom(chatRoomID)
-      environment.aggregator ! RemoveChatRoom(chatRoomID)
 
     case RegChatUser(chatRoomID, userActor) =>
       userActor ! JoinRoom(getChatRoomActorRef(chatRoomID))
@@ -122,6 +124,17 @@ class ChatSupervisor(envType: String) extends Actor with ActorLogging {
 
     case HeimdallrChatStatus =>
       log.info( "Heimdallr ChatSupervisor Running ..." )
+    // *** supervisor ! "akka://heimdallr/user/{Valid ActorName}"
+    case path: String =>
+      log.debug(s"checking path => $path")
+      context.actorSelection(path) ! Identify(path)
+
+    case ActorIdentity(path, Some(ref)) =>
+      log.debug(s"found actor $ref on $path")
+
+    // *** supervisor ! "/user/{Invalid ActorName}"
+    case ActorIdentity(path, None) =>
+      log.debug(s"could not find an actor on $path")
 
     case Terminated(user) =>
       log.info("Receive Terminated Event of ChatRoomActor")
@@ -130,4 +143,3 @@ class ChatSupervisor(envType: String) extends Actor with ActorLogging {
       log.warning("ChatSupervisor Unknown message : " + x)
   }
 }
-
